@@ -2,6 +2,8 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
+using Amazon.Auth.AccessControlPolicy;
+using Amazon.Auth.AccessControlPolicy.ActionIdentifiers;
 using Amazon.SimpleNotificationService;
 using Amazon.SimpleNotificationService.Model;
 using Amazon.SQS;
@@ -13,10 +15,11 @@ namespace AwsSnsAndSqs
     {
         public static void Main(string[] args)
         {
+            const bool useEasySubscription = false;
             var sns = new AmazonSimpleNotificationServiceClient();
             var sqs = new AmazonSQSClient();
 
-            string nameOfNewTopic = args[0];  //Sanisise this to ensure no illegal characters.
+            string nameOfNewTopic = args[0];  //Sanitise this to ensure no illegal characters.
             var emailAddress = args[1];
 
             try
@@ -72,7 +75,35 @@ namespace AwsSnsAndSqs
                 if (myQueueArn != null)
                 {
                     //https://aws.amazon.com/blogs/developer/subscribing-an-sqs-queue-to-an-sns-topic/
-                    sns.SubscribeQueue(topicArn, sqs, myQueueUrl);
+
+                    if (useEasySubscription)
+                    {
+                        sns.SubscribeQueue(topicArn, sqs, myQueueUrl);
+                    }
+                    else
+                    {
+                        var subscribeRequest = new SubscribeRequest(topicArn, "SQS", myQueueArn);
+
+                        sns.Subscribe(subscribeRequest);
+
+                        ActionIdentifier[] actions = new ActionIdentifier[2];
+                        actions[0] = SQSActionIdentifiers.SendMessage;
+                        actions[1] = SQSActionIdentifiers.ReceiveMessage;
+
+                        Policy sqsPolicy = new Policy()
+                            .WithStatements(new Statement(Statement.StatementEffect.Allow)
+                                            .WithPrincipals(Principal.AllUsers)
+                                            .WithResources(new Resource(myQueueArn))
+                                            .WithConditions(ConditionFactory.NewSourceArnCondition(topicArn))
+                                             .WithActionIdentifiers(actions));
+
+
+                        var attributeDictionary = new Dictionary<string, string>();
+                        attributeDictionary.Add("Policy", sqsPolicy.ToJson());
+                        var attributes = new SetQueueAttributesRequest { QueueUrl = myQueueUrl, Attributes = attributeDictionary };
+
+                        sqs.SetQueueAttributes(attributes);
+                    }
 
                     Thread.Sleep(TimeSpan.FromSeconds(5));
 
