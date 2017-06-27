@@ -11,4 +11,4 @@ I installed the AWS SDK on my Windows 10 machine from this link:
 https://docs.aws.amazon.com/powershell/latest/userguide/pstools-getting-set-up.html
 
 
-Note, that it takes two command line arguments.
+Note, that this project takes two command line arguments.
